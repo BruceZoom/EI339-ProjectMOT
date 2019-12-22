@@ -45,6 +45,7 @@ class KalmanFilter(object):
         for i in range(ndim):
             self._motion_mat[i, ndim + i] = dt
             self._motion_mat[i, 2 * ndim + i] = dt / 2
+            self._motion_mat[ndim + i, 2 * ndim + i] = dt
         self._update_mat = np.eye(ndim, 3 * ndim)
 
         # Motion and observation uncertainty are chosen relative to the current
