@@ -106,3 +106,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+/code/MOT16/
+/code/resources/
+
+.idea/
