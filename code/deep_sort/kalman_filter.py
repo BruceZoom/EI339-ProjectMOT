@@ -126,7 +126,7 @@ class KalmanFilter(object):
         std_acceleration = [
             self._std_weight_acceleration * mean[3],
             self._std_weight_acceleration * mean[3],
-            1e-5,
+            1e-6,
             self._std_weight_acceleration * mean[3]
         ]
         motion_cov = np.diag(np.square(np.r_[std_pos, std_vel, std_acceleration]))
