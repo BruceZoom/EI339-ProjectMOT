@@ -19,8 +19,7 @@ chi2inv95 = {
     8: 15.507,
     9: 16.919}
 
-
-class KalmanFilter(object):
+class KalmanFilter:
     """
     A simple Kalman filter for tracking bounding boxes in image space.
 
@@ -36,17 +35,25 @@ class KalmanFilter(object):
     observation model).
 
     """
+    ORDER = 2
+    N_DIM = 4
+    STATE_VECTOR_LEN = (ORDER + 1) * N_DIM
 
     def __init__(self):
-        ndim, dt = 4, 1.
+        dt = 1.
 
         # Create Kalman filter model matrices.
-        self._motion_mat = np.eye(3 * ndim, 3 * ndim)
-        for i in range(ndim):
-            self._motion_mat[i, ndim + i] = dt
-            self._motion_mat[i, 2 * ndim + i] = dt / 2
-            self._motion_mat[ndim + i, 2 * ndim + i] = dt
-        self._update_mat = np.eye(ndim, 3 * ndim)
+        self._motion_mat = np.eye(self.STATE_VECTOR_LEN, self.STATE_VECTOR_LEN)
+
+        factorial = 1
+        for i in range(1, self.ORDER + 1):
+            factorial *= i
+            value = 1 / factorial * dt
+            offset = i * self.N_DIM
+            for j in range(self.STATE_VECTOR_LEN - offset):
+                self._motion_mat[j][j + offset] = value
+
+        self._update_mat = np.eye(self.N_DIM, self.STATE_VECTOR_LEN)
 
         # Motion and observation uncertainty are chosen relative to the current
         # state estimate. These weights control the amount of uncertainty in
@@ -73,11 +80,11 @@ class KalmanFilter(object):
 
         """
         mean_pos = measurement
-        mean_vel = np.zeros_like(mean_pos)
-        mean_acceleration = np.zeros_like(mean_pos)
-        mean = np.r_[mean_pos, mean_vel, mean_acceleration]
+        rest_len = self.STATE_VECTOR_LEN - self.N_DIM
+        mean_rest = np.zeros(rest_len)
+        mean = np.r_[mean_pos, mean_rest]
 
-        std = [
+        std = np.array((
             2 * self._std_weight_position * measurement[3],
             2 * self._std_weight_position * measurement[3],
             1e-2,
@@ -86,12 +93,11 @@ class KalmanFilter(object):
             10 * self._std_weight_velocity * measurement[3],
             1e-5,
             10 * self._std_weight_velocity * measurement[3],
-            50 * self._std_weight_acceleration * measurement[3],
-            50 * self._std_weight_acceleration * measurement[3],
-            1e-6,
-            50 * self._std_weight_acceleration * measurement[3]
-        ]
-        covariance = np.diag(np.square(std))
+        ))
+        rest_len -= self.N_DIM
+        std_rest = np.ones(rest_len) * 50 * self._std_weight_acceleration * measurement[3]
+        std_rest[2::3] = 1e-6
+        covariance = np.diag(np.square(np.r_[std, std_rest]))
         return mean, covariance
 
     def predict(self, mean, covariance):
@@ -123,13 +129,10 @@ class KalmanFilter(object):
             self._std_weight_velocity * mean[3],
             1e-5,
             self._std_weight_velocity * mean[3]]
-        std_acceleration = [
-            self._std_weight_acceleration * mean[3],
-            self._std_weight_acceleration * mean[3],
-            1e-5,
-            self._std_weight_acceleration * mean[3]
-        ]
-        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel, std_acceleration]))
+        rest_len = self.STATE_VECTOR_LEN - 2 * self.N_DIM
+        std_rest = np.ones(rest_len) * self._std_weight_acceleration * mean[3]
+        std_rest[2::3] = 1e-6
+        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel, std_rest]))
 
         mean = np.dot(self._motion_mat, mean)
         covariance = np.linalg.multi_dot((
