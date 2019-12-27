@@ -8,6 +8,32 @@
 %\usepackage{cases}
 %\usepackage{subeqnarray}
 
+\usepackage{multicol}
+\usepackage{lipsum}
+\usepackage{mathtools}
+\usepackage{cuted}
+
+\usepackage{extpfeil}
+\usepackage{mathpartir}
+\usepackage[mathscr]{eucal}
+
+\usepackage{hyperref}
+\usepackage{cleveref}
+\crefformat{section}{\S#2#1#3} % see manual of cleveref, section 8.2.1
+\crefformat{subsection}{\S#2#1#3}
+\crefformat{subsubsection}{\S#2#1#3}
+
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+\usepackage{color}
+\usepackage{xcolor}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+
 \begin{document}
 %
 % paper title
@@ -69,12 +95,57 @@ IEEEtran, journal, \LaTeX, paper, template.
 
 \IEEEPARstart{T}{his}
 
-\section{Understanding and Re-implementing DeepSort}
+\section{Understanding and Re-implementing DeepSORT}
 
-\section{Using LSTM for MOT}
+\section{Other Existing Advanced Techniques}
+Despite of deep cosine features and multi-stage matching, there have been other more recent works on solving the multiple object tracking problem.
+We mainly look into two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
 
-\section{Using More Kalman Filters}
+\subsection{Association LSTM}
+The multi-object tracking in video can be considered as a task of process some sequence, which is natural to consider using recurrent neural networks to tackle the problem.
+Lu \textit{et al.} \cite{lu2017online} implements an association LSTM which refines the detection and association feature from the time-invariant models.
+We will briefly review their idea in this section.
 
+In the traditional SORT algorithm, we will use Kalman filters to update the state of an object in the current frame.
+Therefore, we can better match the future state of the object with the predicted one than matching the future state with the current state.
+The association LSTM shares the similar idea, which not only refines the state of an object through prediction, but also predict the feature of each object.
+More specifically, they let the LSTM to refine the feature extracted by some network, possibly the deep cosine features, by making the features of the same object across frames more similar while those of different objects more different.
+The association loss \eqref{eq:assoc-loss} in their optimization goal reveals such objective.
+\begin{equation}
+    \mathcal{L}_{asso} = \sum_t \sum_{i,j} \theta_{ji}|\phi_{t-1}^i \cdot \phi_t^j|
+    \label{eq:assoc-loss}
+\end{equation}
+where $\tilde{f}_t = \{\phi_t^1, \cdots, \phi_t^N\}$ is the refined feature for $N$ objects at time $t$, and $\theta_{ji} \in 0, 1$ is an indicator, which equals 1 iff. object $i$ at time $t-1$ should be associated with object $j$ at time $t$.
+\todo{The associated objects is expected to have similar features, i.e., higher inner product values.
+The higher loss means better performance.}
+
+Figure~\ref{fig:lstm-struct} shows their model's structure.
+Beside the association loss, there is another term in the loss function of the LSTM, the regression error.
+They refines the states of objects through optimizing this term.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.99\linewidth]{fig/assoc_lstm.png}
+    \caption{Association LSTM Structure\protect\footnotemark}
+    \label{fig:lstm-struct}
+\end{figure}
+\footnotetext{From \cite{lu2017online}.}
+
+As explained before, the functionality of the LSTM layer is similar to the Kalman filter.
+However, the advantage of using LSTM is that it stores more information than the Kalman filter, which possesses only the knowledge of the previous frame due to the Markov assumption.
+Every frame from the begin to the current one has their influences on the output of the LSTM at the current time stamp, allowing the network to fully utilize the information of the previous video.
+
+We attempt to find some existing code implementing the idea but failed to do so.
+We also try to implement the association LSTM ourselves but ended up with not enough computational resources to run experiments.
+However, we are enlightened by the idea of carrying more information and predicting the transformation of features.
+And we propose using Kalman filters to do the both in \cref{sec:our-work}.
+
+\subsection{Deep Hungarian Network}
+
+
+
+\section{Our Work: Using More Kalman Filters}
+\label{sec:our-work}
 \subsection{Extended State Space}
 
 Extending the state vector is a natural idea. A state space of higher dimensions should be able to characterize the state of object in video with more precision. The constant velocity model proposed by \cite{Wojke2017simple}, where the position, aspect ratio and height of a track changes linearly over time, is simple and should apply to most pedestrians, but fail to account for some complex cases, such as the one shown in Fig.~\ref{fig:example-of-nonlinearity}. Therefore, we augment the state space first with acceleration (2nd order) using the constant acceleration model and later higher order terms.
