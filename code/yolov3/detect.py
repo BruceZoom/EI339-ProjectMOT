@@ -13,9 +13,8 @@ def detect(save_txt=False, save_img=False):
 
     # Initialize
     device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
-    if os.path.exists(out):
-        shutil.rmtree(out)  # delete output folder
-    os.makedirs(out)  # make new output folder
+    save_path = out
+    file = open(save_path, 'w')
 
     # Initialize model
     model = Darknet(opt.cfg, img_size)
@@ -64,7 +63,6 @@ def detect(save_txt=False, save_img=False):
         torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=img_size, half=half)
     else:
-        save_img = True
         dataset = LoadImages(source, img_size=img_size, half=half)
 
     # Get names and colors
@@ -73,7 +71,7 @@ def detect(save_txt=False, save_img=False):
 
     # Run inference
     t0 = time.time()
-    for path, img, im0s, vid_cap in dataset:
+    for j, (path, img, im0s, vid_cap) in enumerate(dataset, 1):
         t = time.time()
 
         # Get detections
@@ -99,7 +97,6 @@ def detect(save_txt=False, save_img=False):
             else:
                 p, s, im0 = path, '', im0s
 
-            save_path = str(Path(out) / Path(p).name)
             s += '%gx%g ' % img.shape[2:]  # print string
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
@@ -115,9 +112,22 @@ def detect(save_txt=False, save_img=False):
 
                 # Write results
                 for *xyxy, conf, cls in det:
-                    if save_txt:  # Write to file
-                        with open(save_path + '.txt', 'a') as file:
-                            file.write(('%g ' * 6 + '\n') % (*xyxy, cls, conf))
+                    if save_txt and cls == 0:  # Write to file
+                        line = '%g' + ',%g' * 4
+                        print(
+                            j,
+                            '-1',
+                            line % (
+                                xyxy[0].item(),
+                                xyxy[1].item(),
+                                (xyxy[2] - xyxy[0]).item(),
+                                (xyxy[3] - xyxy[1]).item(),
+                                conf.item(),
+                            ),
+                            '-1,-1',
+                            sep=',',
+                            file=file
+                        )
 
                     if save_img or view_img:  # Add bbox to image
                         label = '%s %.2f' % (names[int(cls)], conf)
@@ -159,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--names', type=str, default='data/coco.names', help='*.names path')
     parser.add_argument('--weights', type=str, default='weights/yolov3-spp.weights', help='path to weights file')
     parser.add_argument('--source', type=str, default='data/samples', help='source')  # input file/folder, 0 for webcam
-    parser.add_argument('--output', type=str, default='output', help='output folder')  # output folder
+    parser.add_argument('--output', type=str, default='output', help='output file')  # output folder
     parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.5, help='IOU threshold for NMS')
@@ -171,4 +181,4 @@ if __name__ == '__main__':
     print(opt)
 
     with torch.no_grad():
-        detect()
+        detect(True)
