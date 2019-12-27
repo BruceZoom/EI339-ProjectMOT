@@ -141,8 +141,54 @@ However, we are enlightened by the idea of carrying more information and predict
 And we propose using Kalman filters to do the both in \cref{sec:our-work}.
 
 \subsection{Deep Hungarian Network}
+We have discussed how to upgrade the detection and feature extraction part so far, and now we move on to upgrade the matching algorithm.
+The traditional approach is to formulate the problem as a bi-partite matching, where we need to matching objects in the previous frame with those in the current frame to minimizing the total distance (assuming the same object will not transform too much in both the spatial state and feature space), given the distance matrix.
+The problem can be solved efficiently with Hungarian algorithm, the input and output of which are both matrices.
+Xu \cite{xu2019deepmot} models the algorithm as a deep neural network, where more information and more complex computation can be performed to obtain the matching matrix.
 
+\begin{figure*}
+    \centering
+    \includegraphics[width=\linewidth]{fig/dhn.png}
+    \caption{The Structure of Deep Hungarian Network\protect\footnotemark}
+    \label{fig:dhn-struct}
+\end{figure*}
 
+The structure of the deep Hungarian network they propose is shown in Figure~\ref{fig:dhn-struct}.
+The input distance matrix is first flattened row-wise and processed by a bidirectional recurrent neural network to obtain a set of hidden feature representations.
+After flatten the representations column-wise, they are then processed by another recurrent layer and some fully connected layers to obtain the soft assignment matrix.
+The row-wise and column-wise flatten operations are to simulate the original Hungarian algorithm.
+
+\footnotetext{From \cite{xu2019deepmot}.}
+
+We had planned to integrate the refined feature matrix obtained from the association LSTM with the DHN, because the fixed output feature size is perfect for the input to the DHN.
+But the failure to re-implement the former one causes us unable to try out such combination.
+We run the code come along with the paper to get tracking performance on the training set of MOT16 and obtain Table~\ref{tab:eval-deepmot}.
+
+\linespread{1.2}
+\begin{table}[h]
+    \caption{Evaluation Result of DeepMOT}
+    \label{tab:eval-deepmot}
+    \begin{tabular}{ccccccccc}
+        \hline
+        & MOTA & IDF1 & MT & ML & FP & FN & IDs\\\hline
+        MOT16-02 & 21.5\% & 30.9\% & 6 & 25 & 1688 & 12240 & 77\\
+        MOT16-04 & 15.7\% & 40.5\% & 11 & 28 & 16470 & 23435 & 166\\
+        MOT16-05 & 15.8\% & 27.9\% & 3 & 88 & 677 & 5013 & 49\\
+        MOT16-09 & 11.1\% & 41.4\% & 9 & 3 & 2788 & 1822 & 63\\
+        MOT16-10 & 26.8\% & 40.5\% & 9 & 24 & 2243 & 6716 & 56\\
+        MOT16-11 & 39.1\% & 47.4\% & 14 & 31 & 1826 & 3729 & 30\\
+        MOT16-13 & 11.5\% & 30.6\% & 7 & 70 & 1279 & 8827 & 23\\
+        OVERALL & 19.2\% & 38.4\% & 59 & 269 & 26971 & 61782 & 464\\\hline
+    \end{tabular}
+\end{table}
+\linespread{1.0}
+
+Compared to the deep SORT, the MOTA drops dramatically with lots of false positive and false negative increase.
+The index switch count decreases, which could be caused due to the decrease of successful trackings, and therefore this index does not hold much meaning.
+
+% The deep Hungarian network has many problems.
+% It is a black box algorithm, whereas the Hungarian algorithm is a white box one and is proved to be reasonable.
+% It is believed that 
 
 \section{Our Work: Using More Kalman Filters}
 \label{sec:our-work}
@@ -150,7 +196,7 @@ And we propose using Kalman filters to do the both in \cref{sec:our-work}.
 
 Extending the state vector is a natural idea. A state space of higher dimensions should be able to characterize the state of object in video with more precision. The constant velocity model proposed by \cite{Wojke2017simple}, where the position, aspect ratio and height of a track changes linearly over time, is simple and should apply to most pedestrians, but fail to account for some complex cases, such as the one shown in Fig.~\ref{fig:example-of-nonlinearity}. Therefore, we augment the state space first with acceleration (2nd order) using the constant acceleration model and later higher order terms.
 
-\begin{figure}[t]
+\begin{figure}[h]
     \centering
     \includegraphics[width=\linewidth]{fig/accelerating-pedestrian-height-plot.pdf}
     \caption{An example of the nonlinear behavior of a state variable. The height of the pedestrian 70 in the sequence MOT16-02 is plotted against time. The pedestrian first moves towards camera and then exits the field of view.}
@@ -196,6 +242,8 @@ In a similar fashion, the state vector with constant $k$-order terms is a $4k$-d
 \subsection{Filtering on Features}
 
 \section{Conclusion}
+
+
 
 \bibliographystyle{IEEEtran}
 \bibliography{Ref}
