@@ -1,9 +1,86 @@
 import argparse
 from sys import platform
+import cv2
 
-from models import *  # set ONNX_EXPORT in models.py
-from utils.datasets import *
-from utils.utils import *
+from yolov3.models import *  # set ONNX_EXPORT in models.py
+from yolov3.utils.datasets import *
+from yolov3.utils.utils import *
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--cfg', type=str, default='yolov3/cfg/yolov3.cfg', help='*.cfg path')
+parser.add_argument('--names', type=str, default='data/coco.names', help='*.names path')
+parser.add_argument('--weights', type=str, default='yolov3/weights/yolov3.weights', help='path to weights file')
+parser.add_argument('--source', type=str, default='data/samples', help='source')  # input file/folder, 0 for webcam
+parser.add_argument('--output', type=str, default='output', help='output file')  # output folder
+parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
+parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
+parser.add_argument('--iou-thres', type=float, default=0.5, help='IOU threshold for NMS')
+parser.add_argument('--fourcc', type=str, default='mp4v', help='output video codec (verify ffmpeg support)')
+parser.add_argument('--half', action='store_true', help='half precision FP16 inference')
+parser.add_argument('--device', default='0', help='device id (i.e. 0 or 0,1) or cpu')
+parser.add_argument('--view-img', action='store_true', help='display results')
+opt = parser.parse_args()
+
+class Detector(object):
+    def __init__(self):
+        img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
+        out, source, weights, half, view_img = opt.output, opt.source, opt.weights, opt.half, opt.view_img
+        webcam = source == '0' or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
+
+        # Initialize.
+        device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
+        model = Darknet(opt.cfg, img_size)
+        attempt_download(weights)
+        if weights.endswith('.pt'):  # pytorch format
+            model.load_state_dict(torch.load(weights, map_location=device)['model'])
+        else:  # darknet format
+            _ = load_darknet_weights(model, weights)
+        model.to(device).eval()
+
+        # Half precision
+        half = half and device.type != 'cpu'  # half precision only supported on CUDA
+        if half:
+            model.half()
+
+        self.device = device
+        self.model = model
+        self.img_size = img_size
+
+    def detect(self, img, frame_idx):
+        det_mat = []
+        # print(self.img_size)
+        im0 = img.copy()
+        img = cv2.resize(img, (320, 192), interpolation=cv2.INTER_AREA).transpose([2, 0, 1])
+
+        img = torch.from_numpy(img).to(self.device)
+        if img.ndimension() == 3:
+            img = img.unsqueeze(0)
+        print(img.shape)
+        pred = self.model(img)[0]
+        if opt.half:
+            pred = pred.float()
+        # Apply NMS
+        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres)
+        # Process detections
+        for i, det in enumerate(pred):  # detections per image
+            if det is not None and len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+
+                # Write results
+                for *xyxy, conf, cls in det:
+                    if cls == 0:  # Write to file
+                        det_mat.append([
+                            frame_idx,
+                            -1,
+                            xyxy[0].item(),
+                            xyxy[1].item(),
+                            (xyxy[2] - xyxy[0]).item(),
+                            (xyxy[3] - xyxy[1]).item(),
+                            conf.item(),
+                            -1, -1
+                        ])
+        return np.array(det_mat)
 
 
 def detect(save_txt=False, save_img=False):
@@ -164,20 +241,6 @@ def detect(save_txt=False, save_img=False):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='*.cfg path')
-    parser.add_argument('--names', type=str, default='data/coco.names', help='*.names path')
-    parser.add_argument('--weights', type=str, default='weights/yolov3-spp.weights', help='path to weights file')
-    parser.add_argument('--source', type=str, default='data/samples', help='source')  # input file/folder, 0 for webcam
-    parser.add_argument('--output', type=str, default='output', help='output file')  # output folder
-    parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
-    parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.5, help='IOU threshold for NMS')
-    parser.add_argument('--fourcc', type=str, default='mp4v', help='output video codec (verify ffmpeg support)')
-    parser.add_argument('--half', action='store_true', help='half precision FP16 inference')
-    parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1) or cpu')
-    parser.add_argument('--view-img', action='store_true', help='display results')
-    opt = parser.parse_args()
     print(opt)
 
     with torch.no_grad():
