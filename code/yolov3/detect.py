@@ -52,10 +52,11 @@ class Detector(object):
         im0 = img.copy()
         img = cv2.resize(img, (320, 192), interpolation=cv2.INTER_AREA).transpose([2, 0, 1])
 
-        img = torch.from_numpy(img).to(self.device)
+        img = torch.from_numpy(img).to(self.device).float()
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
         print(img.shape)
+        # img = img.to(self.device)
         pred = self.model(img)[0]
         if opt.half:
             pred = pred.float()

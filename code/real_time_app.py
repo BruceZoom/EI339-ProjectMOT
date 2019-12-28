@@ -63,17 +63,18 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         # "image_filenames": image_filenames,
         # "detections": detections,
         # "groundtruth": groundtruth,
-        "image_size": (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                       int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))),
+        "image_size": (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                       int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))),
         "min_frame_idx": 0,
         "max_frame_idx": max_time * 200,
         "feature_dim": 127,
-        "update_ms": 5
+        "update_ms": 1000
     }
 
     def frame_callback(vis, frame_idx):
         ret, frame = cap.read()
         frame = np.array(frame)
+        print(frame.shape)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             cap.release()
@@ -82,10 +83,16 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
 
         detections = detector.detect(frame.copy(), frame_idx)
         print(detections.shape)
+        if detections.shape[0] <= 0:
+            return
+            # vis.set_image(cache_data['frame'])
+            # vis.draw_detections(cache_data['detections'])
+            # vis.draw_trackers(cache_data['tracks'])
 
         features = encoder(frame.copy(), detections[:, 2:6].copy())
-        detections = [np.r_[(row, feature)] for row, feature
-                      in zip(detections, features)]
+        detections = np.array([np.r_[(row, feature)] for row, feature
+                               in zip(detections, features)])
+        print(detections.shape)
 
         # Load image and generate detections with feature vectors.
         detections = create_detections(detections, min_detection_height)
@@ -101,7 +108,7 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         # Update tracker.
         tracker.predict()
         tracker.update(detections)
-
+        print(frame.shape)
         # Update visualization.
         vis.set_image(frame)
         vis.draw_detections(detections)
