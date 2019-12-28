@@ -66,9 +66,9 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         "image_size": (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
                        int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))),
         "min_frame_idx": 0,
-        "max_frame_idx": max_time * 200,
+        "max_frame_idx": max_time * 2,
         "feature_dim": 127,
-        "update_ms": 1000
+        "update_ms": 500
     }
 
     def frame_callback(vis, frame_idx):
@@ -84,10 +84,8 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         detections = detector.detect(frame.copy(), frame_idx)
         print(detections.shape)
         if detections.shape[0] <= 0:
+            vis.set_image(frame)
             return
-            # vis.set_image(cache_data['frame'])
-            # vis.draw_detections(cache_data['detections'])
-            # vis.draw_trackers(cache_data['tracks'])
 
         features = encoder(frame.copy(), detections[:, 2:6].copy())
         detections = np.array([np.r_[(row, feature)] for row, feature
@@ -159,7 +157,7 @@ def parse_args():
         "gallery. If None, no budget is enforced.", type=int, default=None)
     parser.add_argument(
         "--max_time", help="Maximum time in seconds to record.",
-        type=int, default=10)
+        type=int, default=30)
     parser.add_argument(
         "--model",
         default="resources/networks/mars-small128.pb",
