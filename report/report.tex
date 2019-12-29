@@ -382,7 +382,7 @@ The measurement matrix is
     H = [I_4, \mathcal{O}, \mathcal{O}].
 \]
 
-In a similar fashion, the state vector with constant $k$-order terms is a $4k$-dimensional vector. The state-transition matrix is $4k \times 4k$ and the measurement matrix $4 \times 4k$ in this case.
+In a similar fashion, the state vector with constant $k$-order terms is a $4(k + 1)$-dimensional vector. The state-transition matrix is $4(k + 1) \times 4(k + 1)$ and the measurement matrix $4 \times 4(k + 1)$ in this case.
 
 To implement the Kalman filter with extended state space, we modified the file \texttt{kalman\_filter.py} to extend the state vector and replace the measurement matrix and the state-transition matrix. We obtain minor improvements over baseline with the addition of acceleration, as shown in Table~\ref{tab:extended-state-space}. With a 0.1\% drop in MOTA, we observe noticeable improvements in the metric IDF1, IDP and IDR (IDP and IDR not shown in the table, but their improvements are comparable to that of IDF1).
 
