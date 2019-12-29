@@ -1,6 +1,8 @@
 # Data
 *data/
 *dataset/
+# COCO classes etc for Yolov3
+!/code/yolov3/data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
