@@ -1,0 +1,205 @@
+\documentclass{article}
+\usepackage[UTF8]{ctex}
+\usepackage{color,amsmath,amssymb,graphicx,fancyhdr,amsfonts,amsthm,algorithmic,verbatim,bbold}
+\usepackage{algorithm,hyperref}
+\usepackage{mkolar_definitions}
+\usepackage{extpfeil}
+\usepackage[left=2cm,top=2cm,right=2cm]{geometry}
+\numberwithin{algorithm}{section}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\res}{\text{Res}}
+
+\usepackage{xcolor}
+\usepackage{listings}
+\lstset{
+    numbers=left,
+    numberstyle= \tiny,
+    keywordstyle= \color{ blue!70},
+    commentstyle= \color{red!50!green!50!blue!50},
+    frame=shadowbox,
+    rulesepcolor= \color{ red!20!green!20!blue!20} ,
+    escapeinside=``,
+    xleftmargin=1em,xrightmargin=0em, aboveskip=1em,
+    framexleftmargin=2em,
+    showstringspaces=false,
+    showtabs=false,
+    breaklines=true
+}
+
+\title{Code Explained}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Real Time Tracking Application}
+In this section, we illustrate the implementation of our real time tracking application.
+The code is from \textsl{real\_time\_app.py} and \textsl{yolov3/detect.py}.
+
+The code below shows the main function run in the program.
+This segment initialize a camera using OpenCV.
+It creates a detector that generates the bounding boxes.
+The \textsl{Detector} class is implemented on our own based on interfaces provided in the YOLOv3, which we explain later.
+Then it creates a feature extractor and bounding box encoder using the classes provided in Deep SORT.
+A multi-object tracker is initialized using the \textsl{Tracker} class in Deep SORT.
+We then initialize a dictionary named \textsl{seq\_info}, which is used in the visualization.
+
+\begin{lstlisting}[language=Python]
+def run(min_confidence, nms_max_overlap, min_detection_height,
+      max_cosine_distance, nn_budget, max_time, feature_model):
+  # Initialize
+  cap = cv2.VideoCapture(0)
+  detector = Detector()
+  metric = nn_matching.NearestNeighborDistanceMetric(
+      "cosine", max_cosine_distance, nn_budget)
+  encoder = create_box_encoder(feature_model, batch_size=32)
+  tracker = Tracker(metric)
+  seq_info = {
+      "sequence_name": "real-time",
+      "image_size": (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                      int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))),
+      "min_frame_idx": 0,
+      "max_frame_idx": max_time * 20,
+      "feature_dim": 127,
+      "update_ms": 500
+  }
+  ...
+\end{lstlisting}
+
+The rest of the \textsl{run} function contains a callback function and the initialization of the visualization process.
+The detection and tracking is performed on each frame callback.
+
+\begin{lstlisting}[language=Python]
+def run(...):
+  ...
+  # The call back function
+  def frame_callback(vis, frame_idx):
+    ...
+
+  # Run tracker.
+  visualizer = visualization.Visualization(seq_info, update_ms=5)
+  visualizer.run(frame_callback)
+
+  cap.release()
+  cv2.destroyAllWindows()
+\end{lstlisting}
+
+We then focus on the callback function in each frame.
+The function first reads an image from the camera and process keyboard input.
+Then it uses the detector we implemented based on YOLOv3 to generate a series of bounding boxes whose labels are "person".
+If no such detections are found, we simply draw the image and go to the next frame.
+
+\begin{lstlisting}[language=Python]
+def frame_callback(vis, frame_idx):
+  # read image from camera
+  ret, frame = cap.read()
+  frame = np.array(frame)
+  if cv2.waitKey(1) & 0xFF == ord('q'):
+      cap.release()
+      cv2.destroyAllWindows()
+      exit(0)
+
+  # generate bounding box
+  detections = detector.detect(frame.copy(), frame_idx)
+  # only display image if no detection
+  if detections.shape[0] <= 0:
+      vis.set_image(frame)
+      return
+  ...
+\end{lstlisting}
+
+Then we extract deep features based on interfaces in Deep SORT, and apply non-maximum suppression to detections.
+In the process, those with low confidences have been deleted.
+Lastly, we update the tracker and the visualization to plot bounding boxes.
+
+\begin{lstlisting}[language=Python]
+def frame_callback(vis, frame_idx):
+  ...
+  # Generate deep feature
+  features = encoder(frame.copy(), detections[:, 2:6].copy())
+  detections = np.array([np.r_[(row, feature)] for row, feature
+                          in zip(detections, features)])
+  detections = create_detections(detections, min_detection_height)
+  detections = [d for d in detections if d.confidence >= min_confidence]
+
+  # Run non-maxima suppression.
+  boxes = np.array([d.tlwh for d in detections])
+  scores = np.array([d.confidence for d in detections])
+  indices = preprocessing.non_max_suppression(
+      boxes, nms_max_overlap, scores)
+  detections = [detections[i] for i in indices]
+
+  # Update tracker.
+  tracker.predict()
+  tracker.update(detections)
+  # Update visualization.
+  vis.set_image(frame)
+  vis.draw_detections(detections)
+  vis.draw_trackers(tracker.tracks)
+\end{lstlisting}
+
+Then we look at the \textsl{Detector} class we implement in YOLOv3.
+The initialize step is similar to the example detect program in YOLO, which we will skip here.
+In the \textsl{detect} method, we first backup the frame passes in, and preprocess the original frame by resizing to the correct input shape, normalizing, and other adjustments.
+Then we send the processed image to the network model with non-maximum suppression to obtain detections.
+
+\begin{lstlisting}[language=Python]
+class Detector(object):
+  def __init__(self):
+    ...
+  
+  def detect(self, img, frame_idx):
+    det_mat = []
+    im0 = img.copy()
+
+    # Pre-processing
+    # Padded resize
+    img = letterbox(img, new_shape=self.img_size)[0]
+    # Convert
+    img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+    img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32)  # uint8 to fp16/fp32
+    img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+    # Generate predictions
+    img = torch.from_numpy(img).to(self.device).float()
+    if img.ndimension() == 3:
+        img = img.unsqueeze(0)
+    pred = self.model(img)[0]
+    if opt.half:
+        pred = pred.float()
+    # Apply NMS
+    pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres)
+    ...
+\end{lstlisting}
+
+Then we go through all detections and rescale the bounding boxes to their original size.
+For those with the "person" label, we append the bounding box and its confidence score to the detection matrix.
+
+\begin{lstlisting}[language=Python]
+class Detector(object):
+  def detect(self, img, frame_idx): 
+    ...
+    # Process detections
+    for i, det in enumerate(pred):
+        if det is not None and len(det):
+            # Rescale boxes from img_size to original size
+            det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+
+            # Store into matrix
+            for *xyxy, conf, cls in det:
+                if cls == 0:  # Only "person" labels
+                    det_mat.append([
+                        frame_idx,
+                        -1,
+                        xyxy[0].item(),
+                        xyxy[1].item(),
+                        (xyxy[2] - xyxy[0]).item(),
+                        (xyxy[3] - xyxy[1]).item(),
+                        conf.item(),
+                        -1, -1
+                    ])
+    return np.array(det_mat)
+\end{lstlisting}
+
+\end{document}
