@@ -202,4 +202,98 @@ class Detector(object):
     return np.array(det_mat)
 \end{lstlisting}
 
+\section{Extending the State Space}
+
+In this section, we explain our implementation of the extended state space, based on Deep SORT's original implementation of the Kalman filter. We introduce the methods of the class \texttt{KalmanFilter} in the file \texttt{kalman\_filter.py} and notes our modifications.
+
+\subsection{Initialization}
+
+To support constant terms of arbitrary order, the tunable parameter \texttt{ORDER} is added that can be adjusted before execution. Note that $k$-order constant terms require the state vector to be of length $4(k + 1)$, which is reflected in the constant \texttt{STATE\_VECTOR\_LEN}. The state-transition matrix \texttt{\_motion\_mat} is populated with coefficients that are reciprocal of factorial, as dictated by integration. Also, we add the weight of higher-order terms' standard deviation.
+
+\begin{lstlisting}[language=Python]
+class KalmanFilter:
+    ORDER = 2
+    N_DIM = 4
+    STATE_VECTOR_LEN = (ORDER + 1) * N_DIM
+
+    def __init__(self):
+        dt = 1.
+
+        # Create Kalman filter model matrices.
+        self._motion_mat = np.eye(self.STATE_VECTOR_LEN, self.STATE_VECTOR_LEN)
+
+        factorial = 1
+        for i in range(1, self.ORDER + 1):
+            factorial *= i
+            value = 1 / factorial * dt
+            offset = i * self.N_DIM
+            for j in range(self.STATE_VECTOR_LEN - offset):
+                self._motion_mat[j][j + offset] = value
+
+        self._update_mat = np.eye(self.N_DIM, self.STATE_VECTOR_LEN)
+
+        # Motion and observation uncertainty are chosen relative to the current
+        # state estimate. These weights control the amount of uncertainty in
+        # the model. This is a bit hacky.
+        self._std_weight_position = 1. / 20
+        self._std_weight_velocity = 1. / 160
+        self._std_weight_acceleration = 1. / 320
+\end{lstlisting}
+
+\subsection{Initiation of Tracks}
+
+The function \texttt{initiate} for initiation of new tracks is exclusive to Deep SORT's implementation of the Kalman filter. For a new track, its mean is a concatenation of its first measurement and zeroes for the rest of the terms. Then the covariance matrix is augmented as evident at Line~17--18. The initial covariance for higher-order terms is set to be large, with the expectation that the covariance will decrease over time with more measurements.
+
+\begin{lstlisting}[language=Python]
+def initiate(self, measurement):
+    mean_pos = measurement
+    rest_len = self.STATE_VECTOR_LEN - self.N_DIM
+    mean_rest = np.zeros(rest_len)
+    mean = np.r_[mean_pos, mean_rest]
+
+    std = np.array((
+        2 * self._std_weight_position * measurement[3],
+        2 * self._std_weight_position * measurement[3],
+        1e-2,
+        2 * self._std_weight_position * measurement[3],
+        10 * self._std_weight_velocity * measurement[3],
+        10 * self._std_weight_velocity * measurement[3],
+        1e-5,
+        10 * self._std_weight_velocity * measurement[3],
+    ))
+    rest_len -= self.N_DIM
+    std_rest = np.ones(rest_len) * 50 * self._std_weight_acceleration * measurement[3]
+    std_rest[2::3] = 1e-6
+    covariance = np.diag(np.square(np.r_[std, std_rest]))
+    return mean, covariance
+\end{lstlisting}
+
+\subsection{Prediction}
+
+In the prediction step, we augment the covariance matrix by adding covariance between higher-order terms, in the array \texttt{std\_rest}. The standard deviation of higher-order terms for the aspect ratio is set to $10^{-6}$ on Line~14. The rest of the standard deviation is weighted by the term \texttt{\_std\_weight\_acceleration} and \texttt{mean[3]} i.e. the height of the bounding box at the previous time step.
+
+\begin{lstlisting}[language=Python]
+def predict(self, mean, covariance):
+    std_pos = [
+        self._std_weight_position * mean[3],
+        self._std_weight_position * mean[3],
+        1e-2,
+        self._std_weight_position * mean[3]]
+    std_vel = [
+        self._std_weight_velocity * mean[3],
+        self._std_weight_velocity * mean[3],
+        1e-5,
+        self._std_weight_velocity * mean[3]]
+    rest_len = self.STATE_VECTOR_LEN - 2 * self.N_DIM
+    std_rest = np.ones(rest_len) * self._std_weight_acceleration * mean[3]
+    std_rest[2::3] = 1e-6
+    motion_cov = np.diag(np.square(np.r_[std_pos, std_vel, std_rest]))
+
+    mean = np.dot(self._motion_mat, mean)
+    covariance = np.linalg.multi_dot((
+        self._motion_mat, covariance, self._motion_mat.T)) + motion_cov
+
+    return mean, covariance
+\end{lstlisting}
+
 \end{document}
