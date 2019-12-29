@@ -144,6 +144,31 @@ where $v_k \sim N(0, R)$ is the measurement noise and
 
 Exact formulas for prediction and update are omitted for brevity.
 
+\subsection{Matching}
+
+\texttt{Tracker.update} accepts a list of detections as input and when called, calls \texttt{Tracker.\_match} to solve the matching problem. \texttt{\_match} calls the function \texttt{matching\_cascade} in the file \texttt{linear\_assignment.py}, which uses the algorithm specified in Algorithm~\ref{alg:matching-cascade}. Unmatched tracks and detections are further matched with IOU.
+
+\begin{algorithm}[t]
+    \caption{Matching cascade, from \cite{Wojke2018deep}}
+    \label{alg:matching-cascade}
+    \begin{algorithmic}[1]
+        \Statex \textbf{Input:} Track indices $\mathcal{T} = \{1, \dots, N\}$, Detection indices $\mathcal{D} = \{1, \dots, M\}$, Maximum age $A_\textrm{max}$
+        \State Compute cost matrix $C = [c_{i,j}]$
+        \State Compute gate matrix $B = [b_{i,j}]$
+        \State Initialize set of matches $\mathcal{M} \gets \emptyset$
+        \State Initialize set of unmatched detections $\mathcal{U} \gets \mathcal{D}$
+        \For{$n \gets 1$ \textbf{to} $A_\textrm{max}$}
+            \State Select tracks by age $\mathcal{T}_n \gets \{i \in \mathcal{T} | a_i = n\}$
+            \State $[x_{i,j}] \gets \mathrm{min\_cost\_matching}(\mathcal{C}, \mathcal{T}_n, \mathcal{U})$
+            \State $\mathcal{M} \gets \mathcal{M} \cup \{(i, j) | b_{i,j} \cdot x_{i,j} > 0\}$
+            \State $\mathcal{U} \gets \mathcal{U} \setminus \{j | \sum_i b_{i,j} \cdot x_{i,j} > 0\}$
+        \EndFor
+        \State \Return $\mathcal{M}, \mathcal{U}$
+    \end{algorithmic}
+\end{algorithm}
+
+\texttt{\_match} returns matches, unmatched tracks and unmatched detections. Unmatched tracks are marked as ``missed'' with the method \texttt{Track.mark\_missed}. Unmatched detections are used to initiate new tracks.
+
 \section{Other Existing Advanced Techniques}
 Despite of deep cosine features and multi-stage matching, there have been other more recent works on solving the multiple object tracking problem.
 We mainly look into two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
