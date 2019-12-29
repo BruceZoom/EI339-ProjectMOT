@@ -77,23 +77,28 @@
 
 % As a general rule, do not put math, special symbols or citations
 % in the abstract or keywords.
-\begin{abstract}
-The abstract goes here.
-\end{abstract}
+% \begin{abstract}
+% The abstract goes here.
+% \end{abstract}
 
 % Note that keywords are not normally used for peerreview papers.
-\begin{IEEEkeywords}
-IEEEtran, journal, \LaTeX, paper, template.
-\end{IEEEkeywords}
+% \begin{IEEEkeywords}
+% IEEEtran, journal, \LaTeX, paper, template.
+% \end{IEEEkeywords}
 
 
 \IEEEpeerreviewmaketitle
 
-\todo{From the project guideline: In the FIRST PARAGAPH of your final project report, please CLEARLY summarize which evaluation criteria your work is applicable to, for example, 1. Baseline, 2. Good, 3. Excellent. Meanwhile, please clearly present the supporting points why your work is applicable to such criteria, for example, novel  ideas, novel insights, performance gains, etc. If your improvement is small, it is not okay to overclaim contributions with better criteria.}
+% \todo{From the project guideline: In the FIRST PARAGAPH of your final project report, please CLEARLY summarize which evaluation criteria your work is applicable to, for example, 1. Baseline, 2. Good, 3. Excellent. Meanwhile, please clearly present the supporting points why your work is applicable to such criteria, for example, novel  ideas, novel insights, performance gains, etc. If your improvement is small, it is not okay to overclaim contributions with better criteria.}
 
 \section{Introduction}
-
-\IEEEPARstart{T}{his}
+We have aimed at achieving the excellent work by using more Kalman filters in more interesting ways.
+However, we did not achieve all goals we have planned, so we are not sure our work is counted as good or excellent, but we list our achievement in all criteria below.
+\begin{itemize}
+    \item \textbf{Baseline:} We successfully get the DeepSORT code running, and generate the MOT metrics evaluation on the tracking results of MOT16 dataset. We use the DeepSORT code to generate tracking result of our own video, and we implement a real-time tracking application based on YOLO detections and DeepSORT.
+    \item \textbf{Good:} We use YOLO \cite{redmon2016you}\cite{yolov3} to generate better detections and feed them to the DeepSORT framework. We explore the idea of using CNN-LSTM to approach the tracking problem, but do not have enough resources to implement the idea and run the training. We use deep Hungarian network \cite{xu2019deepmot} to replace the matching process in the DeepSORT. But they do not improve very much from the DeepSORT and we give some analysis of the results.
+    \item \textbf{Excellent:} We extend the state representation of an object with the higher-order derivatives of its spatial coordinates and use Kalman filter to track those information for better translation prediction. We achieve 1\% improvement in IDF1 with slight sacrifices of MOTA. We attempt to apply Kalman filtering to the deep feature as well, but do not have enough time to implement the idea.
+\end{itemize}
 
 \section{Understanding Deep SORT}
 
@@ -171,6 +176,25 @@ Exact formulas for prediction and update are omitted for brevity.
 
 \texttt{\_match} returns matches, unmatched tracks and unmatched detections. Unmatched tracks are marked as ``missed'' with the method \texttt{Track.mark\_missed}. Unmatched detections are used to initiate new tracks.
 
+Table~\ref{tab:eval-deepsort} shows the baseline performance of the DeepSORT.
+
+\begin{table}[h]
+    \caption{Evaluation Result of the DeepSORT}
+    \label{tab:eval-deepsort}
+    \begin{tabular}{ccccccccc}
+        \hline
+        & MOTA & IDF1 & MT & ML & FP & FN & IDs\\\hline
+        MOT16-02 & 34.2\% & 43.7\% & 8 & 12 & 2500 & 9148 & 89\\
+        MOT16-13 & 60.5\% & 62.8\% & 53 & 11 & 1450 & 2877 & 197\\
+        MOT16-09 & 65.6\% & 61.5\% & 12 & 1 & 172 & 1611 & 28\\
+        MOT16-11 & 68.1\% & 64.7\% & 21 & 11 & 426 & 2473 & 32\\
+        MOT16-05 & 54.0\% & 62.1\% & 26 & 28 & 410 & 2683 & 46\\
+        MOT16-10 & 56.3\% & 56.6\% & 22 & 2 & 1940 & 3312 & 133\\
+        MOT16-04 & 58.6\% & 71.1\% & 41 & 18 & 5327 & 14311 & 52\\
+        OVERALL & 55.4\% & 62.9\% & 183 & 83 & 12225 & 36415 & 577\\\hline
+\end{tabular}
+\end{table}
+
 \section{Other Existing Advanced Techniques}
 Despite of deep cosine features and multi-stage matching, there have been other more recent works on solving the multiple object tracking problem.
 We mainly look into using better detections for tracking and other two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
@@ -185,14 +209,35 @@ Figure~\ref{fig:yolo} shows the framework of YOLO.
     \caption{Framework of YOLO\protect\footnotemark}
     \label{fig:yolo}
 \end{figure}
-\footnotetext{From \cite{redmon2016you}.}
 
 They first split the image into $S \times S$ grids and assign a confidence score vector of length $C$ describing which class of the object in the grid is more likely to have.
 For each grid, the model will generate $B$ bounding box centering the grid, each contain the 4-dimensional spatial description and a confidence score for the box.
 Applying non-maximum suppression to all $S \times S \times B$ bounding boxes, we get several accurate detections in the image.
+\footnotetext{From \cite{redmon2016you}.}
 
 We use YOLOv3\cite{yolov3} to process the images in the MOT16 dataset to obtain detections, and use the deep feature network in DeepSORT to extract features from those detections.
-The result of running 
+The result of running tracking based on YOLO detections is shown in Table~\ref{tab:eval-yolo}.
+
+\begin{table}[h]
+    \caption{Evaluation Result of Tracking with YOLO}
+    \label{tab:eval-yolo}
+    \begin{tabular}{ccccccccc}
+        \hline
+        & MOTA & IDF1 & MT & ML & FP & FN & IDs\\\hline
+        MOT16-02 & 10.3\% & 26.1\% & 7 & 29 & 3180 & 12729 & 92\\
+        MOT16-04 & 36.9\% & 47.4\% & 10 & 27 & 5886 & 23971 & 140\\
+        MOT16-05 & 44.4\% & 62.0\% & 32 & 19 & 1233 & 2482 & 79\\
+        MOT16-09 & 46.0\% & 44.9\% & 8 & 2 & 1111 & 1669 & 57\\
+        MOT16-10 & 29.0\% & 38.1\% & 9 & 20 & 2045 & 6536 & 162\\
+        MOT16-11 & 50.6\% & 53.4\% & 21 & 29 & 1074 & 3419 & 36\\
+        MOT16-13 & 17.8\% & 31.5\% & 10 & 55 & 1616 & 7563 & 230\\
+        OVERALL & 31.8\% & 43.1\% & 97 & 181 & 16145 & 58369 & 796\\\hline
+    \end{tabular}
+\end{table}
+
+The performance drops from the one in the baseline.
+It is possible that the implementation of YOLOv3 is more suitable for circumstances with less detections results, where the image size is limited.
+The video in the MOT16 is captured out-door with lots of objects from different classes, and therefore it seems not a good idea to process the video using YOLOv3.
 
 \subsection{Association LSTM}
 The multi-object tracking in video can be considered as a task of process some sequence, which is natural to consider using recurrent neural networks to tackle the problem.
@@ -209,8 +254,8 @@ The association loss \eqref{eq:assoc-loss} in their optimization goal reveals su
     \label{eq:assoc-loss}
 \end{equation}
 where $\tilde{f}_t = \{\phi_t^1, \cdots, \phi_t^N\}$ is the refined feature for $N$ objects at time $t$, and $\theta_{ji} \in 0, 1$ is an indicator, which equals 1 iff. object $i$ at time $t-1$ should be associated with object $j$ at time $t$.
-\todo{The associated objects is expected to have similar features, i.e., higher inner product values.
-The higher loss means better performance.}
+The associated objects is expected to have similar features, i.e., higher inner product values.
+The higher loss means better performance.
 
 Figure~\ref{fig:lstm-struct} shows their model's structure.
 Beside the association loss, there is another term in the loss function of the LSTM, the regression error.
@@ -278,6 +323,8 @@ We run the code come along with the paper to get tracking performance on the tra
 
 Compared to the deep SORT, the MOTA drops dramatically with lots of false positive and false negative increase.
 The index switch count decreases, which could be caused due to the decrease of successful trackings, and therefore this index does not hold much meaning.
+The DeepMOT treats the matching problem as a black box, which allows more advanced techniques like DNN to take effect, while giving up the strong prior knowledge of how to solve it.
+This trade-off is not very economical, which might be the cause for the performance drop of such method.
 
 % The deep Hungarian network has many problems.
 % It is a black box algorithm, whereas the Hungarian algorithm is a white box one and is proved to be reasonable.
