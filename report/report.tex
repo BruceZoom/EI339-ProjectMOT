@@ -416,6 +416,14 @@ Our implementation of the extended state space is flexible enough that constant 
 
 \subsection{Filtering on Features}
 
+In this section, we want to apply filtering on latent feature vector extracted by the detector front end. This part is not implemented due to time issues, but regarded as directions worth exploring in the future.
+
+The idea is to apply Kalman Filter directly on the feature vectors extracted by the detector. This requires a few assumptions on the detector and the distribution of the feature vector. One of them is that the feature vectors learned by the detector forms a smooth surface in high dimensional space, and within a small range, it can be treated as linear.  The other is that between two consecutive frames, the feature vector will not change by a large scale and can be modeled by a linear transition equation.
+
+Under these assumptions, we will create a bank of Kalman filters, each with a different transition matrix. When a new frame comes, detections and corresponding features will be extracted and then sent into this unit. For each detection, we will try to filter its feature vector by all filters in the bank and generate a set of proposed feature vectors. The matching will be done on all derived feature vectors and for one detection, only the matching with highest score will be accepted. Afterwards, all filters in the bank will be updated given the matched detection.
+
+One problem of this idea is how to determine the bank of filters. One idea is to train it through statistical methods by ground truth tracks; another is to just parameterize the transition matrices by machine learning models, e.g. neural networks and train them by back propagation. 
+
 \section{Conclusion}
 
 
