@@ -99,7 +99,26 @@ IEEEtran, journal, \LaTeX, paper, template.
 
 \section{Other Existing Advanced Techniques}
 Despite of deep cosine features and multi-stage matching, there have been other more recent works on solving the multiple object tracking problem.
-We mainly look into two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
+We mainly look into using better detections for tracking and other two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
+
+\subsection{Using YOLO Detections for Tracking}
+We first use YOLO\cite{redmon2016you} to generate better detections than the provided detections, which are generated using DPM.
+Figure~\ref{fig:yolo} shows the framework of YOLO.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{fig/yolo.png}
+    \caption{Framework of YOLO\protect\footnotemark}
+    \label{fig:yolo}
+\end{figure}
+\footnotetext{From \cite{redmon2016you}.}
+
+They first split the image into $S \times S$ grids and assign a confidence score vector of length $C$ describing which class of the object in the grid is more likely to have.
+For each grid, the model will generate $B$ bounding box centering the grid, each contain the 4-dimensional spatial description and a confidence score for the box.
+Applying non-maximum suppression to all $S \times S \times B$ bounding boxes, we get several accurate detections in the image.
+
+We use YOLOv3\cite{yolov3} to process the images in the MOT16 dataset to obtain detections, and use the deep feature network in DeepSORT to extract features from those detections.
+The result of running 
 
 \subsection{Association LSTM}
 The multi-object tracking in video can be considered as a task of process some sequence, which is natural to consider using recurrent neural networks to tackle the problem.
