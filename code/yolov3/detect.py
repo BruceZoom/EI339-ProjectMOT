@@ -1,6 +1,7 @@
 import argparse
 from sys import platform
 import cv2
+import numpy as np
 
 from yolov3.models import *  # set ONNX_EXPORT in models.py
 from yolov3.utils.datasets import *
@@ -8,9 +9,9 @@ from yolov3.utils.utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cfg', type=str, default='yolov3/cfg/yolov3.cfg', help='*.cfg path')
-parser.add_argument('--names', type=str, default='data/coco.names', help='*.names path')
+parser.add_argument('--names', type=str, default='yolov3/data/coco.names', help='*.names path')
 parser.add_argument('--weights', type=str, default='yolov3/weights/yolov3.weights', help='path to weights file')
-parser.add_argument('--source', type=str, default='data/samples', help='source')  # input file/folder, 0 for webcam
+parser.add_argument('--source', type=str, default='yolov3/data/samples', help='source')  # input file/folder, 0 for webcam
 parser.add_argument('--output', type=str, default='output', help='output file')  # output folder
 parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
 parser.add_argument('--conf-thres', type=float, default=0.3, help='object confidence threshold')
@@ -38,7 +39,7 @@ class Detector(object):
         model.to(device).eval()
 
         # Half precision
-        half = half and device.type != 'cpu'  # half precision only supported on CUDA
+        self.half = half and device.type != 'cpu'  # half precision only supported on CUDA
         if half:
             model.half()
 
@@ -50,12 +51,18 @@ class Detector(object):
         det_mat = []
         # print(self.img_size)
         im0 = img.copy()
-        img = cv2.resize(img, (320, 192), interpolation=cv2.INTER_AREA).transpose([2, 0, 1])
+
+        # pre-processing
+        # Padded resize
+        img = letterbox(img, new_shape=self.img_size)[0]
+        # Convert
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32)  # uint8 to fp16/fp32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
 
         img = torch.from_numpy(img).to(self.device).float()
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
-        print(img.shape)
         # img = img.to(self.device)
         pred = self.model(img)[0]
         if opt.half:

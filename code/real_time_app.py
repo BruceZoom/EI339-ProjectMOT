@@ -66,33 +66,31 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         "image_size": (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
                        int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))),
         "min_frame_idx": 0,
-        "max_frame_idx": max_time * 2,
+        "max_frame_idx": max_time * 20,
         "feature_dim": 127,
         "update_ms": 500
     }
 
     def frame_callback(vis, frame_idx):
+        # read image from camera
         ret, frame = cap.read()
         frame = np.array(frame)
-        print(frame.shape)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             cap.release()
             cv2.destroyAllWindows()
             exit(0)
 
+        # generate bounding box
         detections = detector.detect(frame.copy(), frame_idx)
-        print(detections.shape)
+        # only display image if no detection
         if detections.shape[0] <= 0:
             vis.set_image(frame)
             return
 
+        # generate deep feature
         features = encoder(frame.copy(), detections[:, 2:6].copy())
         detections = np.array([np.r_[(row, feature)] for row, feature
                                in zip(detections, features)])
-        print(detections.shape)
-
-        # Load image and generate detections with feature vectors.
         detections = create_detections(detections, min_detection_height)
         detections = [d for d in detections if d.confidence >= min_confidence]
 
@@ -106,7 +104,6 @@ def run(min_confidence, nms_max_overlap, min_detection_height,
         # Update tracker.
         tracker.predict()
         tracker.update(detections)
-        print(frame.shape)
         # Update visualization.
         vis.set_image(frame)
         vis.draw_detections(detections)
