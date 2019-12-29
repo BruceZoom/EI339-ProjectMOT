@@ -100,9 +100,11 @@ However, we did not achieve all goals we have planned, so we are not sure our wo
     \item \textbf{Excellent:} We extend the state representation of an object with the higher-order derivatives of its spatial coordinates and use Kalman filter to track those information for better translation prediction. We achieve 1\% improvement in IDF1 with slight sacrifices of MOTA. We attempt to apply Kalman filtering to the deep feature as well, but do not have enough time to implement the idea.
 \end{itemize}
 
+Per the licensing requirement of GPLv3, which is used by the implementation of Deep SORT and YOLOv3, our work is open-source on GitHub\footnote{Link: \url{https://github.com/BruceZoom/EI339-ProjectMOT}} throughout development.
+
 \section{Understanding Deep SORT}
 
-In this section, we give an overview of the implementation\footnote{Link: \url{https://github.com/nwojke/deep_sort}} by Nicolai and Alex \cite{Wojke2018deep} (referred to as ``their implementation'' in this section), on which our experiments in later sections are based. The differences between our implementation and their implementation are noted in respective experiments.
+In this section, we give an overview of the implementation\footnote{Link: \url{https://github.com/nwojke/deep_sort}} by Nicolai and Alex \cite{Wojke2018deep} (referred to as ``their implementation'' in this section), on which our experiments in later sections are based.
 
 Our presentation of the implementation is based on the following use case: the user has downloaded MOT16 \cite{milan2016mot16} dataset and wish to visualize Deep SORT's tracking performance on the dataset, by identifying people and tagging them by IDs. We shall explain various components associated with this use case.
 
