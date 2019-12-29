@@ -97,6 +97,53 @@ IEEEtran, journal, \LaTeX, paper, template.
 
 \section{Understanding and Re-implementing DeepSORT}
 
+In this section, we give an overview of the implementation\footnote{Link: \url{https://github.com/nwojke/deep_sort}} by Nicolai and Alex \cite{Wojke2018deep} (referred to as ``their implementation'' in this section), on which our experiments in later sections are based. Our presentation of the implementation is based on the following use case: the user has downloaded MOT16 \cite{milan2016mot16} dataset and wish to visualize Deep SORT's tracking performance on the dataset, by identifying people and tagging them by IDs. We shall explain various components associated with this use case.
+
+\subsection{A High-Level View}
+
+The entry point for this use case is the \texttt{run} function in the file \texttt{deep\_sort\_app.py}. The \texttt{run} function constructs an object of the class \texttt{Tracker}, which has a list of ``tracks'' (objects being tracked), represented by the class \texttt{Track}. Then the function \texttt{frame\_callback} is defined that accepts a \texttt{Visualization} object and a frame index as its parameters. The \texttt{Visualization} object contains an \texttt{ImageViewer} object that handles image display and drawing (like drawing bounding boxes).
+
+On a fixed time interval, the \texttt{frame\_callback} function is called. \texttt{frame\_callback} reads the frame, the detections in \texttt{det.txt} (provided by MOT16) and pre-computed feature descriptors for each detection. Each detection is a bounding box in a frame. Then it calls the \texttt{predict} and \texttt{update} method of the \texttt{Tracker} object to perform matching and update the estimations of tracks' states. Confirmed detections are drawn on the frame and the frame is passed to the \texttt{Visualization} object (and in turn \texttt{ImageViewer}). Based on the keyboard input, the \texttt{ImageViewer} either pauses the video playback, steps through each frame, or exits.
+
+\subsection{Generating Feature Descriptors}
+
+It should be noted that, despite the word ``online'' in the name ``Deep SORT'', their implementation requires pre-computed feature descriptors for each detection. The file \texttt{generate\_detections.py} in the directory \texttt{tools} reads the detection file and uses a CNN (architecture given in \cite{Wojke2018deep}) to compute feature descriptors.
+
+\subsection{Kalman Filter}
+
+Only one \texttt{Tracker} object is created throughout execution. In the method \texttt{Tracker.predict}, each \texttt{Track} object's \texttt{predict} in \texttt{Tracker} method is invoked and passed a \texttt{KalmanFilter} object. \texttt{KalmanFilter} also has methods \texttt{predict} and \texttt{update} that take the state and the state error covariance as input. \texttt{update} additionally accepts a measurement as input.
+
+Recall that the state vector for each track is
+\[
+    s = [u, v, \gamma, h, \dot{x}, \dot{y}, \dot{\gamma}, \dot{h}].
+\]
+\texttt{predict} and \texttt{update} implements the \texttt{predict} and \texttt{update} steps of a Kalman filter, respectively. We note the initial values for some parameters below that are otherwise omitted from \cite{Wojke2018deep}. The state-transition equation is
+\[
+    s_{k + 1} = Fs_k + w_k
+\]
+where $F$ is the state-transition matrix given by
+\[
+    F = \begin{bmatrix}
+        I_4 & I_4\\
+        \mathcal{O} & I_4
+    \end{bmatrix}
+\]
+and $w_k \sim N(0, Q)$ is the noise, where
+\[
+    Q = \mathrm{diag}([\frac{h_k^2}{400}, \frac{h_k^2}{400}, 10^{-4}, \frac{h_k^2}{400}, \frac{h_k^2}{160^2}, \frac{h_k^2}{160^2}, 10^{-10}, \frac{h_k^2}{160^2}]).
+\]
+
+The measurement model is
+\[
+    z_k = Hs_k + v_k
+\]
+where $v_k \sim N(0, R)$ is the measurement noise and
+\[
+    R = \mathrm{diag}([\frac{h_k^2}{400}, \frac{h_k^2}{400}, 10^{-2}, \frac{h_k^2}{400}]).
+\]
+
+Exact formulas for prediction and update are omitted for brevity.
+
 \section{Other Existing Advanced Techniques}
 Despite of deep cosine features and multi-stage matching, there have been other more recent works on solving the multiple object tracking problem.
 We mainly look into two innovative method that approaches the MOT problem using recurrent neural network and deep Hungarian network.
@@ -244,7 +291,7 @@ The measurement matrix is
 
 In a similar fashion, the state vector with constant $k$-order terms is a $4k$-dimensional vector. The state-transition matrix is $4k \times 4k$ and the measurement matrix $4 \times 4k$ in this case.
 
-Our work is based on the source code\footnote{Link: \url{https://github.com/nwojke/deep_sort}} of \cite{Wojke2018deep}, mostly modifying the file \texttt{kalman\_filter.py} to extend the state vector and replace the measurement matrix and the state-transition matrix. We obtain minor improvements over baseline with the addition of acceleration, as shown in Table~\ref{tab:extended-state-space}. With a 0.1\% drop in MOTA, we observe noticeable improvements in the metric IDF1, IDP and IDR (IDP and IDR not shown in the table, but their improvements are compararble to that of IDF1).
+To implement the Kalman filter with extended state space, we modified the file \texttt{kalman\_filter.py} to extend the state vector and replace the measurement matrix and the state-transition matrix. We obtain minor improvements over baseline with the addition of acceleration, as shown in Table~\ref{tab:extended-state-space}. With a 0.1\% drop in MOTA, we observe noticeable improvements in the metric IDF1, IDP and IDR (IDP and IDR not shown in the table, but their improvements are comparable to that of IDF1).
 
 Our implementation of the extended state space is flexible enough that constant terms of arbitrary order can be added to the state space. Therefore, we further experiment with 3rd- and 4th-order terms in the state vector. Our experiments have shown that adding more higher-order terms has an adverse effect on the tracking performance. As an example, adding 3rd-order terms showed degraded performance in every metric that we have measured. The following two factors are unfavorable to adding more higher-order terms:
 
